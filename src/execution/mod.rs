@@ -7,17 +7,36 @@ use {COMMENTS_PER_STORY, VOTES_PER_COMMENT, VOTES_PER_STORY, VOTES_PER_USER};
 
 type Stats = HashMap<mem::Discriminant<LobstersRequest>, Histogram<u64>>;
 
+use rand;
+use rand::distributions::IndependentSample;
+
+pub trait Sampler {
+    fn new(scale: f64) -> Self;
+
+    fn user<R: rand::Rng>(&self, rng: &mut R) -> u32;
+
+    fn nusers(&self) -> u32;
+
+    fn comment_for_vote<R: rand::Rng>(&self, rng: &mut R) -> u32;
+
+    fn story_for_vote<R: rand::Rng>(&self, rng: &mut R) -> u32;
+
+    fn nstories(&self) -> u32;
+
+    fn story_for_comment<R: rand::Rng>(&self, rng: &mut R) -> u32;
+
+    fn ncomments(&self) -> u32;
+}
+
 #[derive(Clone, Debug)]
-struct Sampler {
+struct LobstersSampler {
     votes_per_user: histogram_sampler::Sampler,
     votes_per_story: histogram_sampler::Sampler,
     votes_per_comment: histogram_sampler::Sampler,
     comments_per_story: histogram_sampler::Sampler,
 }
 
-use rand;
-use rand::distributions::IndependentSample;
-impl Sampler {
+impl Sampler for LobstersSampler {
     fn new(scale: f64) -> Self {
         // compute how many of each thing there will be in the database after scaling by mem_scale
         let scale = |hist: &'static [(usize, usize)]| {
@@ -30,7 +49,7 @@ impl Sampler {
         let votes_per_comment = scale(VOTES_PER_COMMENT);
         let comments_per_story = scale(COMMENTS_PER_STORY);
 
-        Sampler {
+        LobstersSampler {
             votes_per_user: histogram_sampler::Sampler::from_bins(votes_per_user, 100),
             votes_per_story: histogram_sampler::Sampler::from_bins(votes_per_story, 10),
             votes_per_comment: histogram_sampler::Sampler::from_bins(votes_per_comment, 10),

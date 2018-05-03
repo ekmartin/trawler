@@ -2,7 +2,7 @@ use BASE_OPS_PER_MIN;
 use WorkerCommand;
 use client::{LobstersClient, LobstersRequest};
 use crossbeam_channel;
-use execution::{self, id_to_slug, Sampler};
+use execution::{self, id_to_slug, LobstersSampler, Sampler};
 use rand::{self, Rng};
 use std::sync::{Arc, Barrier, Mutex};
 use std::{thread, time};
@@ -62,7 +62,7 @@ where
     let now = time::Instant::now();
 
     // compute how many of each thing there will be in the database after scaling by mem_scale
-    let sampler = Sampler::new(load.mem_scale);
+    let sampler = LobstersSampler::new(load.mem_scale);
     let nstories = sampler.nstories();
 
     // then, log in all the users
@@ -164,7 +164,7 @@ where
 
             thread::Builder::new()
                 .name(format!("load-gen{}", geni))
-                .spawn(move || execution::generator::run::<C>(load, sampler, pool, target))
+                .spawn(move || execution::generator::run::<C, LobstersSampler>(load, sampler, pool, target))
                 .unwrap()
         })
         .collect();

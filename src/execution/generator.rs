@@ -6,14 +6,15 @@ use rand::{self, Rng};
 use std::sync::atomic;
 use std::time;
 
-pub(super) fn run<C>(
+pub(super) fn run<C, S>(
     load: execution::Workload,
-    sampler: Sampler,
+    sampler: S,
     pool: crossbeam_channel::Sender<WorkerCommand>,
     target: f64,
 ) -> f64
 where
     C: LobstersClient + 'static,
+    S: Sampler,
 {
     let warmup = load.warmup;
     let runtime = load.runtime;
