@@ -136,7 +136,7 @@ impl<'a> WorkloadBuilder<'a> {
     /// there is no need to prime again unless the backend is emptied or the memory scale factor is
     /// changed. Note that priming does not delete the database, nor detect the current scale, so
     /// always empty the backend before calling `run` with `prime` set.
-    pub fn run<C, I>(&self, factory: I, prime: bool)
+    pub fn run<C, I>(&self, factory: I, prime: bool, uniform: bool)
     where
         I: Send + 'static,
         C: LobstersClient<Factory = I> + 'static,
@@ -174,8 +174,13 @@ impl<'a> WorkloadBuilder<'a> {
         let (mut sjrn_t, mut rmt_t) = hists;
 
         // actually run the workload
-        let (generated_per_sec, workers, dropped) =
-            execution::harness::run::<C, _>(self.load.clone(), self.max_in_flight, factory, prime);
+        let (generated_per_sec, workers, dropped) = execution::harness::run::<C, _>(
+            self.load.clone(),
+            self.max_in_flight,
+            factory,
+            prime,
+            uniform,
+        );
 
         let mut issued_per_sec = 0.0;
         for w in workers {

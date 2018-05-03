@@ -1,6 +1,6 @@
 use client::{LobstersClient, LobstersRequest};
 use crossbeam_channel;
-use execution::{self, id_to_slug, LobstersSampler, Sampler};
+use execution::{self, id_to_slug, LobstersSampler, Sampler, UniformSampler};
 use rand::{self, Rng};
 use std::sync::{Arc, Barrier, Mutex};
 use std::{thread, time};
@@ -13,6 +13,7 @@ pub(crate) fn run<C, I>(
     in_flight: usize,
     mut factory: I,
     prime: bool,
+    uniform: bool,
 ) -> (
     f64,
     Vec<thread::JoinHandle<(f64, execution::Stats, execution::Stats)>>,
@@ -156,20 +157,37 @@ where
     }
     barrier.wait();
 
-    let generators: Vec<_> = (0..ngen)
-        .map(|geni| {
-            let pool = pool.clone();
-            let load = load.clone();
-            let sampler = sampler.clone();
+    let generators: Vec<_> = if uniform {
+        (0..ngen)
+            .map(|geni| {
+                let pool = pool.clone();
+                let load = load.clone();
+                let sampler = UniformSampler::new(load.mem_scale);
 
-            thread::Builder::new()
-                .name(format!("load-gen{}", geni))
-                .spawn(move || {
-                    execution::generator::run::<C, LobstersSampler>(load, sampler, pool, target)
-                })
-                .unwrap()
-        })
-        .collect();
+                thread::Builder::new()
+                    .name(format!("load-gen{}", geni))
+                    .spawn(move || {
+                        execution::generator::run::<C, UniformSampler>(load, sampler, pool, target)
+                    })
+                    .unwrap()
+            })
+            .collect()
+    } else {
+        (0..ngen)
+            .map(|geni| {
+                let pool = pool.clone();
+                let load = load.clone();
+                let sampler = sampler.clone();
+
+                thread::Builder::new()
+                    .name(format!("load-gen{}", geni))
+                    .spawn(move || {
+                        execution::generator::run::<C, LobstersSampler>(load, sampler, pool, target)
+                    })
+                    .unwrap()
+            })
+            .collect()
+    };
 
     drop(pool);
     let gps = generators.into_iter().map(|gen| gen.join().unwrap()).sum();

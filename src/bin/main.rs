@@ -304,6 +304,11 @@ fn main() {
                 .help("Set if the backend must be primed with initial stories and comments."),
         )
         .arg(
+            Arg::with_name("uniform")
+                .long("uniform")
+                .help("Pick IDs based on a uniform distribution"),
+        )
+        .arg(
             Arg::with_name("runtime")
                 .short("r")
                 .long("runtime")
@@ -355,5 +360,6 @@ fn main() {
     wl.run::<WebClient, _>(
         WebClientSpawner::new(args.value_of("prefix").unwrap()),
         args.is_present("prime"),
+        args.is_present("uniform"),
     );
 }
