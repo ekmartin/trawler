@@ -1,8 +1,8 @@
-use LobstersRequest;
 use hdrhistogram::Histogram;
 use histogram_sampler;
 use std::collections::HashMap;
 use std::{mem, time};
+use LobstersRequest;
 use {COMMENTS_PER_STORY, VOTES_PER_COMMENT, VOTES_PER_STORY, VOTES_PER_USER};
 
 type Stats = HashMap<mem::Discriminant<LobstersRequest>, Histogram<u64>>;
@@ -36,18 +36,72 @@ struct LobstersSampler {
     comments_per_story: histogram_sampler::Sampler,
 }
 
-impl Sampler for LobstersSampler {
+struct UniformSampler {
+    comments: u32,
+    stories: u32,
+    users: u32,
+}
+
+// compute how many of each thing there will be in the database after scaling by mem_scale
+fn scale_bins<'a>(
+    scale: f64,
+    hist: &'static [(usize, usize)],
+) -> impl Iterator<Item = (usize, usize)> {
+    hist.into_iter()
+        .map(move |&(bin, n)| (bin, (scale * n as f64).round() as usize))
+}
+
+impl Sampler for UniformSampler {
     fn new(scale: f64) -> Self {
-        // compute how many of each thing there will be in the database after scaling by mem_scale
-        let scale = |hist: &'static [(usize, usize)]| {
-            hist.into_iter()
-                .map(|&(bin, n)| (bin, (scale * n as f64).round() as usize))
+        let sum_bins = |hist: &'static [(usize, usize)]| {
+            scale_bins(scale, hist).map(|(_bin, n)| n as u32).sum()
         };
 
-        let votes_per_user = scale(VOTES_PER_USER);
-        let votes_per_story = scale(VOTES_PER_STORY);
-        let votes_per_comment = scale(VOTES_PER_COMMENT);
-        let comments_per_story = scale(COMMENTS_PER_STORY);
+        let comments = sum_bins(VOTES_PER_COMMENT);
+        let stories = sum_bins(VOTES_PER_STORY);
+        let users = sum_bins(VOTES_PER_USER);
+        Self {
+            comments,
+            stories,
+            users,
+        }
+    }
+
+    fn user<R: rand::Rng>(&self, rng: &mut R) -> u32 {
+        rng.gen_range(0, self.users)
+    }
+
+    fn nusers(&self) -> u32 {
+        self.users
+    }
+
+    fn comment_for_vote<R: rand::Rng>(&self, rng: &mut R) -> u32 {
+        rng.gen_range(0, self.comments)
+    }
+
+    fn story_for_vote<R: rand::Rng>(&self, rng: &mut R) -> u32 {
+        rng.gen_range(0, self.stories)
+    }
+
+    fn nstories(&self) -> u32 {
+        self.stories
+    }
+
+    fn story_for_comment<R: rand::Rng>(&self, rng: &mut R) -> u32 {
+        rng.gen_range(0, self.stories)
+    }
+
+    fn ncomments(&self) -> u32 {
+        self.comments
+    }
+}
+
+impl Sampler for LobstersSampler {
+    fn new(scale: f64) -> Self {
+        let votes_per_user = scale_bins(scale, VOTES_PER_USER);
+        let votes_per_story = scale_bins(scale, VOTES_PER_STORY);
+        let votes_per_comment = scale_bins(scale, VOTES_PER_COMMENT);
+        let comments_per_story = scale_bins(scale, COMMENTS_PER_STORY);
 
         LobstersSampler {
             votes_per_user: histogram_sampler::Sampler::from_bins(votes_per_user, 100),
